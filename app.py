@@ -50,16 +50,6 @@ app_url = "http://localhost:5000"
 
 st.markdown("""
     <style>
-        /* Make the iframe take full screen */
-        iframe {
-            width: 100vw !important;
-            height: 100vh !important;
-            border: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 999999;
-        }
         /* Hide Streamlit elements */
         .stApp header {display:none;}
         .stApp footer {display:none;}
