@@ -99,8 +99,12 @@ def get_injected_html():
     
     return html
 
+import base64
+
 html_content = get_injected_html()
+b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+data_uri = f"data:text/html;base64,{b64_html}"
 
 # Render the application
-components.html(html_content, height=800, scrolling=True)
+components.iframe(data_uri, height=800, scrolling=True)
 
