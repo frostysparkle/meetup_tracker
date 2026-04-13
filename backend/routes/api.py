@@ -26,6 +26,21 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def app_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        app_password = get_secret("APP_PASSWORD")
+        admin_token = get_secret("ADMIN_TOKEN")
+        
+        if not app_password:
+            return jsonify({'error': 'Server misconfiguration: missing APP_PASSWORD'}), 500
+            
+        if not token or (token != f"Bearer {app_password}" and token != f"Bearer {admin_token}"):
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 @api_bp.route('/new_user', methods=['POST'])
 @admin_required
 def new_user():

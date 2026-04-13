@@ -108,7 +108,9 @@ else:
             st.rerun()
             
         try:
-            response = requests.get(f"{API_BASE_URL}/attendees")
+            app_pw = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else "default_secret"
+            headers = {"Authorization": f"Bearer {app_pw}"}
+            response = requests.get(f"{API_BASE_URL}/attendees", headers=headers)
             if response.status_code == 200:
                 attendees = response.json()
                 if attendees:
