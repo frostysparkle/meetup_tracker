@@ -3,7 +3,6 @@ from email.message import EmailMessage
 import os
 import threading
 import traceback
-import streamlit as st
 
 def send_email_async(to_email: str, subject: str, body: str, attachment_bytes: bytes = None):
     """Sends an email in a background thread."""
