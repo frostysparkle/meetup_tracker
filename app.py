@@ -32,9 +32,27 @@ if 'auth' not in st.session_state:
     else:
         st.session_state['auth'] = False
 
+def get_api_headers(app_pw_override=None):
+    headers = {}
+    
+    # Hugging Face bypass header
+    if "HF_TOKEN" in st.secrets:
+        headers["Authorization"] = f"Bearer {st.secrets['HF_TOKEN']}"
+        
+    # Our internal app authentication header
+    if app_pw_override:
+        headers["X-App-Token"] = app_pw_override
+    else:
+        try:
+            headers["X-App-Token"] = st.secrets["APP_PASSWORD"]
+        except Exception:
+            headers["X-App-Token"] = "default_secret"
+            
+    return headers
+
 def fetch_stats():
     try:
-        response = requests.get(f"{API_BASE_URL}/stats")
+        response = requests.get(f"{API_BASE_URL}/stats", headers=get_api_headers())
         if response.status_code == 200:
             return response.json().get('total_present', 0)
     except Exception as e:
@@ -108,9 +126,7 @@ else:
             st.rerun()
             
         try:
-            app_pw = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else "default_secret"
-            headers = {"Authorization": f"Bearer {app_pw}"}
-            response = requests.get(f"{API_BASE_URL}/attendees", headers=headers)
+            response = requests.get(f"{API_BASE_URL}/attendees", headers=get_api_headers())
             if response.status_code == 200:
                 attendees = response.json()
                 if attendees:
