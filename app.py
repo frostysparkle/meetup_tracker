@@ -6,6 +6,7 @@ import requests
 import cv2
 import numpy as np
 import time
+import hashlib
 
 # Ensure the parent directory is in the path to import backend modules
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -42,9 +43,21 @@ run_flask_app()
 
 # 2. Streamlit Frontend
 
+def get_auth_token():
+    try:
+        app_pw = st.secrets["APP_PASSWORD"]
+    except Exception:
+        app_pw = "default_secret"
+    return hashlib.sha256((app_pw + "_streamlit_salt").encode()).hexdigest()
+
+expected_token = get_auth_token()
+
 # Initialize session state
 if 'auth' not in st.session_state:
-    st.session_state['auth'] = False
+    if "token" in st.query_params and st.query_params["token"] == expected_token:
+        st.session_state['auth'] = True
+    else:
+        st.session_state['auth'] = False
 
 def fetch_stats():
     try:
@@ -66,6 +79,7 @@ if not st.session_state['auth']:
                 response = requests.post(f"{API_BASE_URL}/verify_password", json={"password": password})
                 if response.status_code == 200 and response.json().get("success"):
                     st.session_state['auth'] = True
+                    st.query_params["token"] = expected_token
                     st.rerun()
                 else:
                     st.error("Invalid password")
@@ -81,6 +95,8 @@ else:
     with col3:
         if st.button("Logout"):
             st.session_state['auth'] = False
+            if "token" in st.query_params:
+                del st.query_params["token"]
             st.rerun()
 
     tab1, tab2 = st.tabs(["Scanner", "Attendees"])
