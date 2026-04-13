@@ -8,13 +8,8 @@ import streamlit as st
 def send_email_async(to_email: str, subject: str, body: str, attachment_bytes: bytes = None):
     """Sends an email in a background thread."""
     
-    # Try getting secrets inside function scope so it works with Streamlit wrapper
-    try:
-        smtp_email = st.secrets["SMTP_EMAIL"]
-        smtp_password = st.secrets["SMTP_PASSWORD"]
-    except Exception as e:
-        print(f"Error loading secrets for email: {e}")
-        return
+    smtp_email = os.environ.get("SMTP_EMAIL")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
 
     if not smtp_email or not smtp_password or smtp_email == "your_email@example.com":
         print("SMTP credentials not configured. Skipping email send.")

@@ -4,16 +4,13 @@ from backend.utils.qr import generate_qr_code
 from backend.utils.email import send_email_async
 import hashlib
 from datetime import datetime
-import streamlit as st
+import os
 from functools import wraps
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 def get_secret(key):
-    try:
-         return st.secrets[key]
-    except Exception:
-         return None
+    return os.environ.get(key)
 
 def admin_required(f):
     @wraps(f)

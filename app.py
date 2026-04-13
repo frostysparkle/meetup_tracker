@@ -1,47 +1,20 @@
 import streamlit as st
-import threading
 import os
 import sys
 import requests
 import cv2
 import numpy as np
-import time
 import hashlib
-
-# Ensure the parent directory is in the path to import backend modules
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-
-from backend import create_app
-from backend.models import db
-
-API_BASE_URL = "http://localhost:5000/api"
 
 # Page Config
 st.set_page_config(page_title="Meetup Tracker", layout="wide")
 
-# 1. Background Flask Server
-@st.cache_resource
-def run_flask_app():
-    app = create_app()
-    with app.app_context():
-        # Initialize DB on start
-        db.create_all()
-        print("Database initialized.")
-        
-    def _run():
-        app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
-        
-    thread = threading.Thread(target=_run)
-    thread.daemon = True
-    thread.start()
-    
-    # Wait a tiny bit for the server to start
-    time.sleep(1)
-    return thread
+try:
+    API_BASE_URL = st.secrets["API_BASE_URL"]
+except Exception:
+    API_BASE_URL = "http://localhost:5000/api"
 
-run_flask_app()
-
-# 2. Streamlit Frontend
+# Streamlit Frontend
 
 def get_auth_token():
     try:
