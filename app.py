@@ -2,7 +2,10 @@ import streamlit as st
 import threading
 import os
 import sys
-import streamlit.components.v1 as components
+import requests
+import cv2
+import numpy as np
+import time
 
 # Ensure the parent directory is in the path to import backend modules
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -10,8 +13,10 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from backend import create_app
 from backend.models import db
 
+API_BASE_URL = "http://localhost:5000/api"
+
 # Page Config
-st.set_page_config(page_title="Meetup Tracker", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Meetup Tracker", layout="wide")
 
 # 1. Background Flask Server
 @st.cache_resource
@@ -23,88 +28,105 @@ def run_flask_app():
         print("Database initialized.")
         
     def _run():
-        # Run on a specific port, avoiding Streamlit's port
         app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
         
     thread = threading.Thread(target=_run)
-    thread.daemon = True # Allows Streamlit to exit cleanly
+    thread.daemon = True
     thread.start()
+    
+    # Wait a tiny bit for the server to start
+    time.sleep(1)
     return thread
 
-# Start backend
 run_flask_app()
 
-# 2. Render Frontend
-# We read the index.html and embed it. 
-# We need to read it as a string and pass it to components.html
-# Note: For relative paths in index.html to work correctly (like ./css/style.css),
-# they might fail if served purely as a string blob.
-# Alternatively, we can use an iframe if we served the static files via Flask.
-# Let's serve the frontend via components.html by injecting the HTML content directly,
-# but we need to inline the CSS/JS or serve them through Flask. 
-# Since we have separate files, it's easier to serve the frontend folder as static files via Flask, 
-# and point an iframe to it. Let's adjust the Flask app setup quickly here to serve the static folder.
+# 2. Streamlit Frontend
 
-frontend_path = os.path.join(os.path.dirname(__file__), 'frontend')
-app_url = "http://localhost:5000"
+# Initialize session state
+if 'auth' not in st.session_state:
+    st.session_state['auth'] = False
 
-st.markdown("""
-    <style>
-        /* Hide Streamlit elements */
-        .stApp header {display:none;}
-        .stApp footer {display:none;}
-    </style>
-""", unsafe_allow_html=True)
+def fetch_stats():
+    try:
+        response = requests.get(f"{API_BASE_URL}/stats")
+        if response.status_code == 200:
+            return response.json().get('total_present', 0)
+    except Exception as e:
+        pass
+    return 0
 
-# Actually, the best way to handle this robustly without changing backend too much 
-# is to read the files and build a combined HTML string, or use Streamlit's static file serving.
-# For simplicity and given the prompt constraints to use components.v1.html, let's embed an iframe
-# but since the static files aren't served by Streamlit directly, we should have Flask serve them.
-
-# Let's dynamically patch Flask app in this script to serve the frontend dir before starting it.
-# We will just write a small helper to load the HTML with injected JS/CSS if needed.
-# Since we already created separate files, reading and injecting is safest for components.html.
-
-def get_injected_html():
-    with open(os.path.join(frontend_path, 'index.html'), 'r') as f:
-        html = f.read()
+if not st.session_state['auth']:
+    st.title("Admin Login")
+    with st.form("login_form"):
+        password = st.text_input("Enter APP_PASSWORD", type="password")
+        submitted = st.form_submit_button("Login")
         
-    # Replace relative paths with inline content or full paths if possible.
-    # To keep it simple, let's read the CSS and JS and inject them into <style> and <script> tags.
-    with open(os.path.join(frontend_path, 'css', 'style.css'), 'r') as f:
-        css = f.read()
-    
-    js_files = [
-        os.path.join(frontend_path, 'js', 'components', 'Navbar.js'),
-        os.path.join(frontend_path, 'js', 'components', 'Login.js'),
-        os.path.join(frontend_path, 'js', 'components', 'Scanner.js'),
-        os.path.join(frontend_path, 'js', 'components', 'Attendees.js'),
-        os.path.join(frontend_path, 'js', 'app.js')
-    ]
-    
-    js_content = ""
-    for js_f in js_files:
-        with open(js_f, 'r') as f:
-            js_content += f.read() + "\n"
+        if submitted:
+            try:
+                response = requests.post(f"{API_BASE_URL}/verify_password", json={"password": password})
+                if response.status_code == 200 and response.json().get("success"):
+                    st.session_state['auth'] = True
+                    st.rerun()
+                else:
+                    st.error("Invalid password")
+            except Exception as e:
+                st.error(f"Error connecting to server: {e}")
+else:
+    # Authenticated UI
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        st.title("Meetup Tracker")
+    with col2:
+        st.metric("Total Present", fetch_stats())
+    with col3:
+        if st.button("Logout"):
+            st.session_state['auth'] = False
+            st.rerun()
+
+    tab1, tab2 = st.tabs(["Scanner", "Attendees"])
+
+    with tab1:
+        st.header("Scan Ticket QR Code")
+        st.write("Use your device's camera to scan the QR code.")
+        
+        img_file_buffer = st.camera_input("Take a picture of the QR code")
+        
+        if img_file_buffer is not None:
+            # Read the image
+            bytes_data = img_file_buffer.getvalue()
+            cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
             
-    # Inject CSS
-    html = html.replace('<link rel="stylesheet" href="./css/style.css">', f'<style>{css}</style>')
-    
-    # Remove script tags
-    html = html.replace('<script src="./js/components/Navbar.js"></script>', '')
-    html = html.replace('<script src="./js/components/Login.js"></script>', '')
-    html = html.replace('<script src="./js/components/Scanner.js"></script>', '')
-    html = html.replace('<script src="./js/components/Attendees.js"></script>', '')
-    html = html.replace('<script src="./js/app.js"></script>', f'<script>{js_content}</script>')
-    
-    return html
+            # Detect QR code
+            detector = cv2.QRCodeDetector()
+            data, bbox, straight_qrcode = detector.detectAndDecode(cv2_img)
+            
+            if data:
+                st.success("QR Code detected successfully!")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/mark_present", json={"id": data})
+                    if response.status_code == 200:
+                        st.success(response.json().get("message"))
+                    else:
+                        st.error(response.json().get("error", "Unknown error"))
+                except Exception as e:
+                    st.error(f"Failed to connect to API: {e}")
+            else:
+                st.warning("No QR code found in the image. Please try again and ensure the code is clear.")
 
-import base64
-
-html_content = get_injected_html()
-b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
-data_uri = f"data:text/html;base64,{b64_html}"
-
-# Render the application
-components.iframe(data_uri, height=800, scrolling=True)
-
+    with tab2:
+        st.header("Present Attendees")
+        if st.button("Refresh List"):
+            st.rerun()
+            
+        try:
+            response = requests.get(f"{API_BASE_URL}/attendees")
+            if response.status_code == 200:
+                attendees = response.json()
+                if attendees:
+                    st.dataframe(attendees, use_container_width=True)
+                else:
+                    st.info("No attendees present yet.")
+            else:
+                st.error("Failed to load attendees.")
+        except Exception as e:
+            st.error(f"Error connecting to server: {e}")
