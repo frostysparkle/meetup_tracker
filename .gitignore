@@ -1,0 +1,6 @@
+GEMINI.md
+__pycache__/
+*.pyc
+.env
+meetup.db
+.streamlit/secrets.toml
