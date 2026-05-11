@@ -15,13 +15,13 @@ def get_secret(key):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        token = request.headers.get('X-App-Token')
         admin_token = get_secret("ADMIN_TOKEN")
         
         if not admin_token:
             return jsonify({'error': 'Server misconfiguration: missing ADMIN_TOKEN'}), 500
             
-        if not token or token != f"Bearer {admin_token}":
+        if not token or token != admin_token:
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
@@ -29,14 +29,14 @@ def admin_required(f):
 def app_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        token = request.headers.get('X-App-Token')
         app_password = get_secret("APP_PASSWORD")
         admin_token = get_secret("ADMIN_TOKEN")
         
         if not app_password:
             return jsonify({'error': 'Server misconfiguration: missing APP_PASSWORD'}), 500
             
-        if not token or (token != f"Bearer {app_password}" and token != f"Bearer {admin_token}"):
+        if not token or (token != app_password and token != admin_token):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
@@ -76,6 +76,7 @@ def new_user():
     return jsonify({'message': 'User created successfully', 'id': hashed_id}), 200
 
 @api_bp.route('/mark_present', methods=['POST'])
+@app_required
 def mark_present():
     data = request.get_json()
     if not data or 'id' not in data:
@@ -97,11 +98,13 @@ def mark_present():
     }), 200
 
 @api_bp.route('/attendees', methods=['GET'])
+@app_required
 def get_attendees():
     present_attendees = Attendee.query.filter_by(is_present=True).all()
     return jsonify([a.to_dict() for a in present_attendees]), 200
 
 @api_bp.route('/stats', methods=['GET'])
+@app_required
 def get_stats():
     count = Attendee.query.filter_by(is_present=True).count()
     return jsonify({'total_present': count}), 200
